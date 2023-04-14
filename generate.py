@@ -23,6 +23,32 @@ from problem import Problem, find_problem_dir
 
 logger: Logger = getLogger(__name__)
 
+checker_sample = './sample/aplusb/checker.cpp'
+info_sample = './sample/aplusb/info.toml'
+random_sample = './sample/aplusb/gen/random.cpp'
+
+def create_new_problem(rootdir, problems):
+    customdir = rootdir / 'custom'
+    for problem in problems:
+        problemdir: Path = customdir / Path(problem)
+        if problemdir.exists():
+            shutil.rmtree(problemdir)
+        problemdir.mkdir()
+        (problemdir / 'sol').mkdir()
+        (problemdir / 'gen').mkdir()
+        shutil.copy(info_sample, problemdir / 'info.toml')
+        shutil.copy(random_sample, problemdir / 'gen' / 'random.cpp')
+        fsol = open(problemdir / 'sol' / 'correct.cpp', 'x')
+        fsol.close()
+        ftask = open(problemdir / 'task.md', 'x')
+        ftask.close()
+        shutil.copy(checker_sample, problemdir / 'checker.cpp')
+        fhash = open(problemdir / 'hash.json', 'w')
+        fhash.write("{}")
+        fhash.close()
+        logger.info('Create problem "{}" success!'.format(problem))
+
+
 def main(args: List[str]):
     try:
         import colorlog
@@ -63,12 +89,16 @@ def main(args: List[str]):
     parser.add_argument('--compile-checker',
                         action='store_true', help='Deprecated: Compile Checker')
     parser.add_argument('--only-html', action='store_true', help='HTML generator Mode')
+    parser.add_argument('-n', '--new', nargs='*', help='Create new custom problem', default=[])
 
     opts = parser.parse_args(args)
 
     if opts.dev + opts.test + opts.clean + opts.only_html >= 2:
         raise ValueError('at most one of --dev, --test, --clean, --only-html can be used')
 
+    if opts.new and opts.problem:
+        raise ValueError('at most one of --new, --problem can be used')
+    
     if opts.compile_checker:
         logger.warning(
             '--compile-checker is deprecated. Checker is compiled in default')
@@ -76,7 +106,12 @@ def main(args: List[str]):
     rootdir: Path = Path(__file__).parent
     problems: List[Problem] = list()
 
+    if opts.new:
+        create_new_problem(rootdir, opts.new)
+        return
+
     for tomlpath in opts.toml:
+        tomlfile = toml.load(opts.toml)
         problems.append(Problem(rootdir, Path(tomlpath).parent))
 
     for problem_name in opts.problem:

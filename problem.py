@@ -46,6 +46,7 @@ def compile(src: Path, rootdir: Path):
     if src.suffix == '.cpp':
         cxx = getenv('CXX', 'g++')
         cxxflags_default = '-O2 -std=c++17 -Wall -Wextra -Werror -Wno-unused-result'
+        suffix = '.exe' if platform.system() == 'Windows' else ''
         if platform.system() == 'Darwin':
             cxxflags_default += ' -Wl,-stack_size,{}'.format(hex(STACK_SIZE))
         if platform.system() == 'Windows':
@@ -57,10 +58,13 @@ def compile(src: Path, rootdir: Path):
             cxxflags_default += ' -fsplit-stack'
         cxxflags = getenv('CXXFLAGS', cxxflags_default).split()
         cxxflags.extend(['-I', str(rootdir / 'common')])
-        args = [cxx] + cxxflags + ['-o', str(src.with_suffix(''))] + [str(src)]
+        args = [cxx] + cxxflags + ['-o', str(src.with_suffix(suffix))] + [str(src)]
+        # print(args)
         logger.debug('compile: %s', args)
-        check_call(args)
+        call(args)
     elif src.suffix == '.in':
+        pass
+    elif src.suffix == '.py':
         pass
     else:
         logger.error('Unknown type of file {}'.format(src))
@@ -84,6 +88,13 @@ def execcmd(src: Path, arg: List[str] = []) -> List[str]:
             cmd = ['cmd', '/C', 'type', str(inpath)]
         else:
             cmd = ['cat', str(inpath)]
+        return cmd
+    elif src.suffix == '.py':
+        if platform.system() == 'Windows':
+            # Windows' built-in command
+            cmd = ['python', str(src)]
+        else:
+            cmd = ['python3', str(src)]
         return cmd
     else:
         raise RuntimeError('Unknown file: {} {}'.format(src, arg))
@@ -132,10 +143,15 @@ class Problem:
         logger.warning(message)
         if not self.ignore_warning:
             raise RuntimeError(message)
+        
+    def get_correct_filename(self):
+        if 'solutions' in self.config:
+            for sol in self.config['solutions']:
+                if sol['type'] == 'correct':
+                    return self.basedir / 'sol' / sol['name']
+        return self.basedir / 'sol' / 'correct.cpp'
 
     def health_check(self):
-        if 'title' not in self.config:
-            self.warning('no title: {}'.format(self.basedir))
         for test in self.config['tests']:
             for i in range(test['number']):
                 cn = casename(test['name'], i) + '.in'
@@ -170,6 +186,11 @@ class Problem:
 
     def compile_correct(self):
         logger.info('compile solution')
+        if 'solutions' in self.config:
+            for sol in self.config['solutions']:
+                if sol['type'] == 'correct':
+                    compile(self.basedir / 'sol' / sol['name'], self.rootdir)
+                    return
         compile(self.basedir / 'sol' / 'correct.cpp', self.rootdir)
 
     def compile_verifier(self):
@@ -239,7 +260,7 @@ class Problem:
     def make_outputs(self, check):
         indir = self.basedir / 'in'
         outdir = self.basedir / 'out'
-        soldir = self.basedir / 'sol'
+        # soldir = self.basedir / 'sol'
         checker = self.checker
 
         logger.info('clear output {}'.format(outdir))
@@ -256,7 +277,7 @@ class Problem:
                 infile = indir / (case + '.in')
                 expected = outdir / (case + '.out')
                 start = datetime.now()
-                check_call_to_file(execcmd(soldir / 'correct.cpp'),
+                check_call_to_file(execcmd(self.get_correct_filename()),
                                    expected, stdin=open(str(infile), 'r'))
                 end = datetime.now()
                 checker_output = bytes()
@@ -507,10 +528,10 @@ class Problem:
             return
 
         is_testcases_already_generated = self.is_testcases_already_generated()
-        is_checker_already_generated = self.is_checker_already_generated()
+        # is_checker_already_generated = self.is_checker_already_generated()
 
-        if not is_checker_already_generated or mode.force_generate():
-            self.compile_checker()
+        # if not is_checker_already_generated or mode.force_generate():
+        #     self.compile_checker()
 
         if not is_testcases_already_generated or mode.force_generate():
             self.compile_correct()
