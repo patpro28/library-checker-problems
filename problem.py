@@ -1,29 +1,28 @@
 #!/usr/bin/env python3
 
-import sys
 import argparse
+import hashlib
+import json
 import os
 import platform
 import shutil
-import hashlib
-import json
-import shutil
+import sys
 from datetime import datetime
-from logging import Logger, basicConfig, getLogger, INFO
+from enum import Enum
+from logging import INFO, Logger, basicConfig, getLogger
 from os import getenv
 from pathlib import Path
 from subprocess import (DEVNULL, PIPE, STDOUT, CalledProcessError,
                         TimeoutExpired, call, check_call, check_output, run)
 from tempfile import TemporaryDirectory, tempdir
-from typing import Any, Iterator, List, MutableMapping, Union, Optional
+from typing import Any, Iterator, List, MutableMapping, Optional, Union
 
-from enum import Enum
 import toml
 
 logger = getLogger(__name__)  # type: Logger
 
 CASENAME_LEN_LIMIT = 40
-STACK_SIZE = 2 ** 31  # 2GB
+STACK_SIZE = 2 ** 29  # 512Mb
 
 
 def casename(name: Union[str, Path], i: int) -> str:
@@ -45,7 +44,7 @@ def param_to_str(key: str, value: object):
 def compile(src: Path, rootdir: Path):
     if src.suffix == '.cpp':
         cxx = getenv('CXX', 'g++')
-        cxxflags_default = '-O2 -std=c++17 -Wall -Wextra -Werror -Wno-unused-result'
+        cxxflags_default = '-O2 -std=c++20 -Wall -Wextra -Werror -Wno-unused-result'
         suffix = '.exe' if platform.system() == 'Windows' else ''
         if platform.system() == 'Darwin':
             cxxflags_default += ' -Wl,-stack_size,{}'.format(hex(STACK_SIZE))
@@ -429,6 +428,7 @@ class Problem:
 
     def gen_html(self):
         from htmlgen import ToHTMLConverter
+
         # convert task
         return ToHTMLConverter(self.basedir, self.config)
 
